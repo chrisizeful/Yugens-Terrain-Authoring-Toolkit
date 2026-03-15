@@ -81,11 +81,18 @@ uniform int bands : hint_range(1, 10) = 5;
 uniform float shadow_intensity : hint_range(-1.0, 0.5, 0.05) = 0.00;
 group_uniforms;
 
+group_uniforms TireMarks;
+uniform sampler2D tire_mark_texture : hint_default_black;
+uniform float tire_mark_world_size = 100.0;
+uniform vec2 tire_mark_world_center = vec2(0.0, 0.0);
+group_uniforms;
+
 // Shared varyings
 varying vec3 vertex_normal;
 varying vec3 custom1;
 varying flat float nearest_wall_color_idx;
 varying vec3 world_pos;
+varying float tire_mark_intensity_frag;
 #ifdef BAKE_MODE
 varying vec3 virtual_vertex;
 #endif
@@ -317,6 +324,12 @@ void vertex() {
 	virtual_vertex = CUSTOM3.xyz;
 	world_pos = (MODEL_MATRIX * vec4(virtual_vertex, 1.0)).xyz;
 #endif
+
+	// Tire mark coloring (no displacement on terrain)
+	vec2 tire_mark_uv = ((world_pos.xz - tire_mark_world_center) / tire_mark_world_size) + 0.5;
+	float tire_mark_intensity = texture(tire_mark_texture, tire_mark_uv).r;
+	tire_mark_intensity_frag = tire_mark_intensity;
+
 	// Calculate ridge and ledge blend factors
 	vec2 rl_uv = UV;
 	float rl_factor = max(rl_uv.x, rl_uv.y);
@@ -456,6 +469,11 @@ void fragment() {
 
 		ALBEDO = floor_color.rgb;
 		ALPHA = floor_color.a;
+
+		// Darken terrain where tire marks exist
+		if (tire_mark_intensity_frag > 0.01) {
+			ALBEDO = mix(ALBEDO, ALBEDO * 0.25, tire_mark_intensity_frag);
+		}
 	}
 	else {
 		// Wall rendering with dual-mode support

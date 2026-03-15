@@ -63,12 +63,19 @@ uniform int bands : hint_range(1, 10) = 5;
 uniform float shadow_intensity : hint_range(-1.0, 0.5, 0.05) = 0.0;
 group_uniforms;
 
+group_uniforms TireMarks;
+uniform sampler2D tire_mark_texture : hint_default_black;
+uniform float tire_mark_world_size = 100.0;
+uniform vec2 tire_mark_world_center = vec2(0.0, 0.0);
+group_uniforms;
+
 varying vec3 model_origin;
 varying vec3 vertex_normal;
 varying vec3 instance_color;
 varying float instance_sprite_id;
 varying flat int instance_id;
 varying float wind_color;
+varying float tire_mark_intensity_frag;
 
 void vertex() {
 	if (animate_active && VERTEX.y > 0.0) {
@@ -111,6 +118,11 @@ void vertex() {
 	vec3 instance_origin = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	vec3 world_position = instance_origin + billboarded_vertex;
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(world_position, 1.0);
+
+	// Sample tire mark intensity for fragment shader darkening
+	vec2 tire_mark_uv = ((instance_origin.xz - tire_mark_world_center) / tire_mark_world_size) + 0.5;
+	float tire_mark_intensity = texture(tire_mark_texture, tire_mark_uv).r;
+	tire_mark_intensity_frag = tire_mark_intensity;
 
 	// Setting varyins
 	model_origin = (MODELVIEW_MATRIX * vec4(0.,0.,0.,1.)).xyz;
@@ -191,7 +203,13 @@ void fragment() {
 
 	if (ALPHA < 0.1) discard;
 
+	// Darken grass where tire marks exist
+	if (tire_mark_intensity_frag > 0.01) {
+		ALBEDO = mix(ALBEDO, ALBEDO * 0.25, tire_mark_intensity_frag);
+	}
+
 	LIGHT_VERTEX = model_origin;
+	ROUGHNESS = 0.0;
 }
 
 void light() {
